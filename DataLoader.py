@@ -54,7 +54,7 @@ class DataLoader:
         return sentence
 
     def save_as_txt(self, path):
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             for sentence in self.data:
                 f.write(f"{sentence}\n")
         print(f"Saved {self.dataset_name} to {path}")
