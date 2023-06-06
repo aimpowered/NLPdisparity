@@ -62,7 +62,7 @@ class DataLoader:
     
     def save_as_csv(self, path):
         df = pd.DataFrame(self.data)
-        df.to_csv(path, index=False, header=False)
+        df.to_csv(path, index=False, header=False, encoding='utf-8')
         print(f"Saved {self.dataset_name} to {path}")
         return
     
