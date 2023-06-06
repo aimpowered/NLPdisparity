@@ -2,6 +2,31 @@ import re
 import pandas as pd
 import copy
 class DataLoader:
+    """
+    Loader for benchmarking datasets to ensure universal formatting.
+    ...
+    Attributes
+    ----------
+    path: str
+        Path to csv or txt file of the data. In the case of CSV there should only be 1 column
+    data: list
+        A list of striings
+    dataset_name: str
+        Name of the dataset that is used when saving the data
+        
+    Methods
+    -------
+    save_as_txt(path):
+        Saves data as a text file to specified path
+    save_as_csv(path):
+        Saves data as a csv file to specified path
+    get_data():
+        Returns data
+    create_deepcopy():
+        Returns a deep copy of the class instance
+    get_name():
+        returns name of the dataset (dataset_name)
+    """
     # Constructor
     def __init__(self, path=None, data=None, dataset_name=""):
         self.dataset_name = dataset_name
