@@ -149,7 +149,7 @@ class DyslexiaInjector:
                         #pick a random homophone from the list of homophones
                         homophone = random.choice(self.homophones_dict[word])
                         #check if the first letter is capitalized then we need to capitalize the first letter of the homophone
-                        #get the index of the first letter of w
+                        #also gets the index of the first letter of the word 
                         if words[i].strip('".,?!:;()').strip("'")[0].isupper():
                             homophone = homophone[0].upper() + homophone[1:]
                         #check if all the letters in the word are capitalized
@@ -186,10 +186,10 @@ class DyslexiaInjector:
                         letters_swapped += 1
                         #lower the probability of swapping a letter with a confusing letter each time we swap a letter
                         p_letter_2 = 0.1*p_letter_2
-                #ensure's proper capitalization of the word
+                #ensure proper capitalization of the word
                 if words[i].strip('".,?!:;()').strip("'")[j].isupper() and not homophone_swapped:
                     word = word[:j] + word[j].upper() + word[j+1:]
-            #If whole word is upper case and its more than 1 letter then capitalize the whole word
+            #if entire word is upper case and its more than 1 letter then capitalize the whole word
             if words[i].isupper() and len(words[i]) > 1:
                 word = word.upper()
             #replace the orignal word with new word and proper punctuation if any
