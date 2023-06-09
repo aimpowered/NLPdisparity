@@ -1,6 +1,7 @@
 import re
 import pandas as pd
 import copy
+import numpy as np
 class DataLoader:
     """
     Loader for benchmarking datasets to ensure universal formatting.
@@ -99,3 +100,13 @@ class DataLoader:
         
     def get_name(self):
         return self.dataset_name
+
+    def get_number_of_sentences(self):
+        return len(self.data)
+    
+    def get_number_of_words(self):
+        return sum([len(sentence.split()) for sentence in self.data])
+    
+    def get_number_of_letters(self):
+        #need to ensure we only count letters and not punctuation
+        return sum([len(re.sub(r'[^\w\s]','',sentence)) for sentence in self.data])
