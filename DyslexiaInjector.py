@@ -29,7 +29,7 @@ class DyslexiaInjector:
     injector(sentence, p_homophone, p_letter)
         Injects dyslexia into a sentence with a given probability
     """
-    def __init__(self, load: DataLoader, homophone_path = "", confusing_letters_path = "", seed = 42):
+    def __init__(self, load: DataLoader, homophone_path = "data/homophones_dict.pickle", confusing_letters_path = "data/confusing_letters_dict.pickle", seed = 42):
         self.load = load
         self.homophones_dict = self.load_homophones(homophone_path)
         self.confusing_letters_dict = self.load_confusing_letters(confusing_letters_path)
@@ -153,6 +153,76 @@ class DyslexiaInjector:
             temp_load.save_as_csv(save_path + f"{temp_load.get_name()}_p_homophone_{p_homophone}_p_letter_{p_letter}.csv")
             temp_load.save_as_txt(save_path + f"{temp_load.get_name()}_p_homophone_{p_homophone}_p_letter_{p_letter}.txt")
 
+    def get_punctuation(self, word):
+        #gets punctuationand symbols from a word
+        punctuation = []
+        for i in range(len(word)):
+            if word[i] in '".,?!:;()' or word[i] == "'":
+                punctuation.append((i,word[i]))
+        return punctuation
+
+    def homophone_swapper(self, in_word, out_word, apostrophe=False):
+        #pick a random homophone from the list of homophones
+        homophone = random.choice(self.homophones_dict[out_word])
+        #check if difference is apostrophe
+        if homophone.replace("'", "") == out_word:
+            apostrophe = True
+        #check if the first letter is capitalized
+        if in_word.strip('".,?!:;()').strip("'")[0].isupper():
+            #Capitalize the first letter of the homophone
+            homophone = homophone[0].upper() + homophone[1:]
+        #check if all the letters in the word are capitalized
+        if in_word.isupper() and len(in_word) > 1:
+            #capitalize the homophone
+            homophone = homophone.upper()
+        #replace the word with the homophone
+        out_word = homophone
+        return out_word, apostrophe
+
+    def confusing_letter_swapper(self, in_word, out_word, p_letter, letters_swapped, homophone_swapped, confusing_letter_swapped = False):
+        for i in range(len(out_word)):
+                #check if swap a letter with a confusing letter with probability p_letter
+                if random.random() < p_letter:
+                    #check if the word is in the confusing letters dict
+                    if out_word[i].lower() in self.confusing_letters_dict.keys():
+                        #pick a random letter from the list of confusing letters
+                        confusing_letter = random.choice(self.confusing_letters_dict[out_word[i].lower()])
+                        #check if swapping a letter in a homophone
+                        if not homophone_swapped:
+                            if in_word.strip('".,?!:;()').strip("'")[i].isupper():
+                                confusing_letter = confusing_letter.upper()
+                        else:
+                            if out_word[i].isupper():
+                                confusing_letter = confusing_letter.upper()
+                        #replace the letter with the confusing letter at index j
+                        out_word = out_word[:i] + confusing_letter + out_word[i+1:]
+                        #update flag
+                        confusing_letter_swapped = True
+                        #update the amount of letters that were swapped
+                        letters_swapped += 1
+                        #lower the probability of swapping a letter with a confusing letter each time a letter is swapped
+                        p_letter = 0.1*p_letter
+                if not homophone_swapped:
+                    #ensure's proper capitalization of the word
+                    if in_word.strip('".,?!:;()').strip("'")[i].isupper():
+                        out_word = out_word[:i] + out_word[i].upper() + out_word[i+1:]
+        return out_word, letters_swapped, confusing_letter_swapped
+
+    def insert_punctuation(self, in_word, out_word, punctuation, apostrophe):
+        if len(punctuation) == 0:
+            return out_word
+        for index, punc in punctuation:
+                    if apostrophe and punc == "'" and index != 0 and index != len(in_word)-1:
+                        continue
+                    #if word already has that type of punctuation then skip it if its not at the first or last index
+                    #also need to make sure its not punction that can be consecutive like "..." 
+                    if index != 0 and index != len(in_word)-1 and punc in out_word:
+                        if in_word[index-1] == punc and in_word[index+1] == punc:
+                            out_word = out_word[:index] + punc + out_word[index:]
+                        continue
+                    out_word = out_word[:index] + punc + out_word[index:]
+        return out_word
+    
     def injector(self, sentence, p_homophone, p_letter):
         #split the sentence into a list of words
         words = sentence.split()
@@ -162,98 +232,43 @@ class DyslexiaInjector:
         letters_swapped = 0
         #keep track of the amount of words that were changed
         words_modified = 0
-        #debugging purposes, alows us to see which words were modified and how
-        #changed_words = []
         for i in range(len(words)):
             #check for punctuation at all indexes of the word and save it
-            punctation = []
-            for j in range(len(words[i])):
-                if words[i][j] in '".,?!:;()' or words[i][j] == "'":
-                    punctation.append((j,words[i][j]))            
+            punctuation = self.get_punctuation(words[i])         
             #get the word and remove any punctuation
             word = words[i].lower().strip('".,?!:;()')
             word = word.strip("'")
-            #create a copy of the word so we can check if it was changed
+            #create a copy of the word to check if it was changed
             word_copy = words[i]
             #flag for homophone swapped and confusing letter swapped
             homophone_swapped = False
             confusing_letter_swapped = False
-            #flag to see if apostrophe is the difference in homophone
+            #flag for apostrophe
             apostrophe = False
             #check if the word is in the homophones dict
             if word in self.homophones_dict.keys():
                 #check if the word has any homophones
                 if len(self.homophones_dict[word]) > 0:
-                    #check if we will swap the word with a homophone with probability p_homophone
+                    #swap the word with a homophone with probability p_homophone
                     if random.random() < p_homophone:
-                        #pick a random homophone from the list of homophones
-                        homophone = random.choice(self.homophones_dict[word])
-                        #check if difference is apostrophe
-                        if homophone.replace("'", "") == word:
-                            apostrophe = True
-                        #check if the first letter is capitalized then we need to capitalize the first letter of the homophone
-                        #get the index of the first letter of w
-                        if words[i].strip('".,?!:;()').strip("'")[0].isupper():
-                            homophone = homophone[0].upper() + homophone[1:]
-                        #check if all the letters in the word are capitalized
-                        if words[i].isupper() and len(words[i]) > 1:
-                            #capitalize the homophone
-                            homophone = homophone.upper()
-                        #replace the word with the homophone
-                        word = homophone
+                        #replace the word with the homophone, flag to see if apostrophe is the difference in homophone
+                        word, apostrophe = self.homophone_swapper(words[i], word)
                         #update the amount of words that were swapped for homophone
                         words_swapped += 1
                         #update the flag
                         homophone_swapped = True
-            p_letter_2 = p_letter
-            for j in range(len(word)):
-                #check if we will swap a letter with a confusing letter
-                if random.random() < p_letter_2:
-                    #check if the word is in the confusing letters dict
-                    if word[j].lower() in self.confusing_letters_dict.keys():
-                        #pick a random letter from the list of confusing letters
-                        confusing_letter = random.choice(self.confusing_letters_dict[word[j].lower()])
-                        #check if we are swapping in a homophone
-                        if not homophone_swapped:
-                            if words[i].strip('".,?!:;()').strip("'")[j].isupper():
-                                confusing_letter = confusing_letter.upper()
-                        else:
-                            if word[j].isupper():
-                                confusing_letter = confusing_letter.upper()
-                        #replace the letter with the confusing letter at index j
-                        word = word[:j] + confusing_letter + word[j+1:]
-                        #update flag
-                        confusing_letter_swapped = True
-                        #update the amount of letters that were swapped
-                        letters_swapped += 1
-                        #lower the probability of swapping a letter with a confusing letter each time we swap a letter
-                        p_letter_2 = 0.1*p_letter_2
-                if not homophone_swapped:
-                    #ensure's proper capitalization of the word
-                    if words[i].strip('".,?!:;()').strip("'")[j].isupper():
-                        word = word[:j] + word[j].upper() + word[j+1:]
+            #use confusing letter swapper to swap letters with probability p_letter
+            word, letters_swapped, confusing_letter_swapped = self.confusing_letter_swapper(
+                words[i], word, p_letter,
+                letters_swapped, homophone_swapped, confusing_letter_swapped)
             #If whole word is upper case and its more than 1 letter then capitalize the whole word
             if words[i].isupper() and len(words[i]) > 1:
                 word = word.upper()
             #replace the orignal word with new word and proper punctuation if any
-            if len(punctation) > 0:
-                for index, punc in punctation:
-                    if apostrophe and punc == "'" and index != 0 and index != len(words[i])-1:
-                        continue
-                    #if word already has that type of punctuation then skip it if its not at the first or last index
-                    #also need to make sure its not punction that can be consecutive like "..." 
-                    if index != 0 and index != len(words[i])-1 and punc in word:
-                        if words[i][index-1] == punc and words[i][index+1] == punc:
-                            word = word[:index] + punc + word[index:]
-                        continue
-                    word = word[:index] + punc + word[index:]
+            word = self.insert_punctuation(words[i], word, punctuation, apostrophe)
             if confusing_letter_swapped or homophone_swapped:
                 words[i] = word
                 words_modified += 1
-                #For debugging purpouses
-                #changed_words.append((word_copy, word))
         #join the list of words back into a sentence
         sentence = " ".join(words)
-        #For debugging purpouses
-        #print(changed_words)
         return sentence, (words_swapped, letters_swapped, words_modified)
