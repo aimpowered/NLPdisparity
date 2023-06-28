@@ -10,7 +10,7 @@ class TestInjector(unittest.TestCase):
             to_translate_wmt14_en.append(dataset_wmt_enfr[i]['translation']['en'])
         wmt14_en = DataLoader(data=to_translate_wmt14_en, dataset_name="wmt14_en")
         #The files paths for homophones and confusing letters will probably have to change
-        self.injector =  DyslexiaInjector(load=wmt14_en, homophone_path="data/homophones_dict.pickle", confusing_letters_path="data/confusing_letters_dict.pickle")
+        self.injector =  DyslexiaInjector(load=wmt14_en, homophone_path="data/homophones_dict_v2.pickle", confusing_letters_path="data/confusing_letters_dict_v2.pickle", confusing_words_path="data/pedler_dict.pickle", seed=3)
     
     def test_get_punctuation(self):
         test_string = "Hello-W.o.rld's?"
@@ -20,7 +20,6 @@ class TestInjector(unittest.TestCase):
     def test_homophone_swapper(self):
         original_word = "Capital,"
         word = "capital"
-        expected_word = "Capital"
         apostrophe = False
         out_word, apostrophe = self.injector.homophone_swapper(original_word, word)
         #check that first letter is capitalized
@@ -43,6 +42,13 @@ class TestInjector(unittest.TestCase):
                 self.assertEqual(out_word[i].isupper(), True)
             else:
                 self.assertEqual(out_word[i].islower(), True)
+    
+    def test_confusing_word_injector(self):
+        original_word = "Back"
+        word = "back"
+        out_word = self.injector.confusing_word_injector(original_word, word)
+        print(f"original word: {original_word} | out_word: {out_word}")
+        self.assertNotEqual(out_word, word)
 
     def test_insert_punctuation(self):
         original_word = "ca,pital."
