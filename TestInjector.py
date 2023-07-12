@@ -29,11 +29,12 @@ class TestInjector(unittest.TestCase):
     
     def test_confusing_letter_swapper(self):
         homophone_swapped = False
+        confusing_word_swapped = False
         confusing_letter_swapped = False
         letters_swapped = 0
         original_word = "CapitAl,"
         word = "capital"
-        out_word, letters_swapped, confusing_letter_swapped = self.injector.confusing_letter_swapper(original_word, word, 1, letters_swapped, homophone_swapped, confusing_letter_swapped)
+        out_word, letters_swapped, confusing_letter_swapped = self.injector.confusing_letter_swapper(original_word, word, 1, letters_swapped, homophone_swapped, confusing_word_swapped, confusing_letter_swapped)
         if letters_swapped > 0:
             self.assertNotEqual(out_word, word)
         #check that word follows the same capitalization as the original word

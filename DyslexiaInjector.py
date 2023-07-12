@@ -195,7 +195,11 @@ class DyslexiaInjector:
     def confusing_letter_swapper(self, in_word, out_word, p_letter, letters_swapped, homophone_swapped, confusing_word_swapped, confusing_letter_swapped):
         for i in range(len(out_word)):
                 #check if swap a letter with a confusing letter with probability p_letter
-                if random.random() < p_letter:
+                if  random.random() <= p_letter:
+                    chance = random.random()
+                    #need to skip first letter with 95% probability, based on Peddler findings
+                    if i == 0 and chance >= 0.95:
+                        continue
                     #check if the word is in the confusing letters dict
                     if out_word[i].lower() in self.confusing_letters_dict.keys():
                         #pick a random letter from the list of confusing letters
@@ -271,7 +275,7 @@ class DyslexiaInjector:
                 #check if the word has any homophones
                 if len(self.homophones_dict[word]) > 0:
                     #swap the word with a homophone with probability p_homophone
-                    if random.random() < p_homophone:
+                    if random.random() <= p_homophone:
                         #replace the word with the homophone, flag to see if apostrophe is the difference in homophone
                         word, apostrophe = self.homophone_swapper(words[i], word)
                         #update the amount of words that were swapped for homophone
@@ -283,7 +287,7 @@ class DyslexiaInjector:
                 #check if the word has any confusing words
                 if len(self.confusing_words_dict[word]) > 0:
                     #swap the word with a homophone with probability p_homophone
-                    if random.random() < p_confusing_word:
+                    if random.random() <= p_confusing_word:
                         word = self.confusing_word_injector(words[i], word)
                         #update the amount of words that were swapped for homophone
                         confusing_words_injected += 1
