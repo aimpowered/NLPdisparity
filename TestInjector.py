@@ -10,7 +10,9 @@ class TestInjector(unittest.TestCase):
             to_translate_wmt14_en.append(dataset_wmt_enfr[i]['translation']['en'])
         wmt14_en = DataLoader(data=to_translate_wmt14_en, dataset_name="wmt14_en")
         #The files paths for homophones and confusing letters will probably have to change
-        self.injector =  DyslexiaInjector(load=wmt14_en, homophone_path="data/homophones_dict.pickle", confusing_letters_path="data/confusing_letters_dict.pickle", confusing_words_path="data/pedler_dict.pickle", seed=3)
+        self.injector =  DyslexiaInjector(load=wmt14_en, homophone_path="data/homophones_dict.pickle",
+                                        confusing_letters_path="data/confusing_letters_dict.pickle", 
+                                        confusing_words_path="data/pedler_dict.pickle", seed=3)
     
     def test_get_punctuation(self):
         test_string = "Hello-W.o.rld's?"
@@ -26,15 +28,20 @@ class TestInjector(unittest.TestCase):
         self.assertEqual(out_word[0].isupper(), True)
         #check that words are different
         self.assertNotEqual(out_word, word)
+        self.assertEqual(out_word, "Capitol")
     
     def test_confusing_letter_swapper(self):
         homophone_swapped = False
         confusing_word_swapped = False
         confusing_letter_swapped = False
         letters_swapped = 0
-        original_word = "CapitAl,"
-        word = "capital"
-        out_word, letters_swapped, confusing_letter_swapped = self.injector.confusing_letter_swapper(original_word, word, 1, letters_swapped, homophone_swapped, confusing_word_swapped, confusing_letter_swapped)
+        original_word = "Shh"
+        word = "shh"
+        out_word, letters_swapped, confusing_letter_swapped = self.injector.confusing_letter_swapper(
+            original_word, word, 1, 
+            letters_swapped, homophone_swapped, 
+            confusing_word_swapped, 
+            confusing_letter_swapped)
         if letters_swapped > 0:
             self.assertNotEqual(out_word, word)
         #check that word follows the same capitalization as the original word
@@ -48,7 +55,9 @@ class TestInjector(unittest.TestCase):
                 swapped_count += 1
         #checking if correct number of letters were swapped
         self.assertEqual(swapped_count, letters_swapped, f"actual_swapped_count: {swapped_count} | given_letters_swapped: {letters_swapped}")
-    
+        #poissbile outcomes based on current version of confusing_letters_dict.pickle July 18 2023
+        self.assertRegex(out_word, "Shn|Snn|Chh|Chn|Cnh|Cnn")
+
     def test_confusing_word_injector(self):
         original_word = "Back"
         word = "back"
@@ -91,7 +100,7 @@ class TestInjector(unittest.TestCase):
         return actual_homophones, actual_words_modified, actual_letters_swapped, actual_confusing_words_injected               
                 
     def test_injector(self):
-        all_sentences= ['I am a sentence.', 'Also, in a sentence, we can have different types of punctuatio!', "Now that we've tested punctuation, let's test homophones.","Let's see what happens when he have an abreviation like NASA"]
+        all_sentences= ['I am a sentence.', 'Also, in a sentence, we can have different types of punctuatioN!', "Now that we've tested punctuation, let's test homophones.","Let's see what happens when he have an abreviation like NASA"]
         #test once with p_homophone = 1 and p_letter = 0 and p_confusing_word = 0, then test with p_homophone = 0 and p_letter = 1 and p_confusing_word = 0, then test with p_homophone = 0 and p_letter = 0 and p_confusing_word = 1
         for original_sentence in all_sentences:
             for i in range(3):

@@ -4,7 +4,7 @@ import copy
 import numpy as np
 class DataLoader:
     """
-    Loader for benchmarking datasets to ensure universal formatting.
+    Loader for benchmarking datasets to ensure universal formatting. To be used in conjunction with DyslexiaInjector.
     ...
     Attributes
     ----------
@@ -27,6 +27,19 @@ class DataLoader:
         Returns a deep copy of the class instance
     get_name():
         returns name of the dataset (dataset_name)
+    
+    Usage
+    -------
+    >>> from datasets import load_dataset
+    >>> from DataLoader import DataLoader
+    >>> dataset_wmt_enfr = load_dataset("wmt14",'fr-en', split='test')
+    >>> to_translate = []
+    >>> for i in range(len(dataset_wmt_enfr)):
+    >>>     to_translate.append(dataset_wmt_enfr[i]['translation']['en'])
+    >>> loader = DataLoader(data=to_translate, dataset_name="wmt14_enfr")
+    >>> loader.save_as_txt("wmt14_enfr.txt")
+    We can also use the text file to create a new DataLoader instance
+    >>> loader2 = DataLoader(path="wmt14_enfr.txt", dataset_name="wmt14_enfr")
     """
     # Constructor
     def __init__(self, path=None, data=None, dataset_name=""):

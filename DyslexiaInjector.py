@@ -28,9 +28,25 @@ class DyslexiaInjector:
         Returns the confusing letters of a letter
     injector(sentence, p_homophone, p_letter)
         Injects dyslexia into a sentence with a given probability
+    Usage
+    -------
+    >>> from datasets import load_dataset
+    >>> from DataLoader import DataLoader
+    >>> from DyslexiaInjector import DyslexiaInjector
+    >>> dataset_wmt_enfr = load_dataset("wmt14",'fr-en', split='test')
+    >>> to_translate = []
+    >>> for i in range(len(dataset_wmt_enfr)):
+    >>>     to_translate.append(dataset_wmt_enfr[i]['translation']['en'])
+    >>> loader = DataLoader(data=to_translate, dataset_name="wmt14_enfr")
+    >>> dyslexia_injector = DyslexiaInjector(loader)
+    >>> dyslexia_injector.injection_swap(p_start=0.1, p_end=0.5, step_size=0.1, save_path="data/wmt14_enfr", save_format="both")
+    This creates multiple files with different levels of dyslexia injected into the dataset. The files are saved in the data folder.
     """
-    def __init__(self, load: DataLoader, homophone_path = "data/homophones_dict.pickle",
-                confusing_letters_path = "data/confusing_letters_dict.pickle", confusing_words_path="data/pedler_dict.pickle", seed = 42):
+    def __init__(self, load: DataLoader, 
+                homophone_path = "data/homophones_dict.pickle",
+                confusing_letters_path = "data/confusing_letters_dict.pickle",
+                confusing_words_path="data/pedler_dict.pickle",
+                seed = 42):
         self.load = load
         self.homophones_dict = self.load_dict(homophone_path)
         self.confusing_letters_dict = self.load_dict(confusing_letters_path)
@@ -75,8 +91,10 @@ class DyslexiaInjector:
                     k = round(k, 3)
                     #create deep copy of the data
                     temp_load, results = self.injection_runner(self.load.create_deepcopy(), i, j, k)
-                    df_swap_results.loc[len(df_swap_results)] = {"dataset":"wmt14_en", "p_homophone":i, "p_letter":j, "p_confusing_word":k, "homophones_injected":results[0],
-                                                                "letters_swapped":results[1], "confusing_words_injected": results[2], "words_modified":results[3], "sentences_changed":results[4]}
+                    df_swap_results.loc[len(df_swap_results)] = {"dataset":"wmt14_en", "p_homophone":i, "p_letter":j, "p_confusing_word":k,
+                                                                "homophones_injected":results[0],"letters_swapped":results[1], 
+                                                                "confusing_words_injected": results[2], "words_modified":results[3], 
+                                                                "sentences_changed":results[4]}
                     self.saver(temp_load, save_path, i, j, k, save_format)
         #add number of sentences to the dataframe
         df_swap_results["sentences"] = self.load.get_number_of_sentences()
