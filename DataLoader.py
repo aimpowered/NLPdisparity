@@ -2,6 +2,7 @@ import re
 import pandas as pd
 import copy
 import numpy as np
+from docx import Document
 class DataLoader:
     """
     Loader for benchmarking datasets to ensure universal formatting. To be used in conjunction with DyslexiaInjector.
@@ -9,7 +10,7 @@ class DataLoader:
     Attributes
     ----------
     path: str
-        Path to csv or txt file of the data. In the case of CSV there should only be 1 column
+        Path to csv, txt or docx file of the data. In the case of CSV there should only be 1 column
     data: list
         A list of striings
     dataset_name: str
@@ -49,10 +50,15 @@ class DataLoader:
             file_type = path.split(".")[-1]
             if file_type == "txt":
                 self.data = self.parse_txt(path)
+                self.data = [self.fix_format(sentence) for sentence in self.data]
             elif file_type == "csv":
                 self.data = pd.read_csv(path, header=None)
-                #convert to list  of strings
                 self.data = self.data[0].tolist()
+                #fix any formatting issues
+                self.data = [self.fix_format(sentence) for sentence in self.data]
+            elif file_type == "docx":
+                doc = Document(path)
+                self.data = [self.fix_format(paragraph.text) for paragraph in doc.paragraphs]
             else:
                 raise Exception("Invalid file type")
         elif data is not None:
@@ -105,6 +111,14 @@ class DataLoader:
         print(f"Saved {self.dataset_name} to {path}")
         return
     
+    def save_as_docx(self, path):
+        document = Document()
+        for sentence in self.data:
+            document.add_paragraph(sentence)
+        document.save(path)
+        print(f"Saved {self.dataset_name} to {path}")
+        return
+
     def get_data(self):
         return self.data
 

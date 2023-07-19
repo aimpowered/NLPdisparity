@@ -20,7 +20,7 @@ class DyslexiaInjector:
         Loads the homophones from a pickle file
     load_confusing_letters(path)
         Loads the confusing letters from a pickle file
-    injection_swap(p_start=0, p_end=1, step_size=0.1, save_path="", save_format="both")
+    injection_swap(p_start=0, p_end=1, step_size=0.1, save_path="", save_format="all")
         Injects dyslexia into the dataset by swapping words and letters.
     get_homophones(word)
         Returns the homophones of a word
@@ -39,7 +39,7 @@ class DyslexiaInjector:
     >>>     to_translate.append(dataset_wmt_enfr[i]['translation']['en'])
     >>> loader = DataLoader(data=to_translate, dataset_name="wmt14_enfr")
     >>> dyslexia_injector = DyslexiaInjector(loader)
-    >>> dyslexia_injector.injection_swap(p_start=0.1, p_end=0.5, step_size=0.1, save_path="data/wmt14_enfr", save_format="both")
+    >>> dyslexia_injector.injection_swap(p_start=0.1, p_end=0.5, step_size=0.1, save_path="data/wmt14_enfr", save_format="all")
     This creates multiple files with different levels of dyslexia injected into the dataset. The files are saved in the data folder.
     """
     def __init__(self, load: DataLoader, 
@@ -60,7 +60,7 @@ class DyslexiaInjector:
             f.close()
         return out   
 
-    def injection_swap(self, p_start=0, p_end=1, step_size=0.1, save_path="", save_format="both"):
+    def injection_swap(self, p_start=0, p_end=1, step_size=0.1, save_path="", save_format="all"):
         """
         Injects dyslexia into the dataset by swapping words and letters. It is to note, that probability p does not result in p% of the words being modified.
         For example, if p = 0.5, it does not mean that 50% of the words will be modified. It means that each word has a 50% chance of being modified. But, not all words
@@ -76,7 +76,7 @@ class DyslexiaInjector:
         save_path : str
             The path where the data needs to be saved
         save_format : str
-            The format in which the data needs to be saved. Can be "both", "csv" or "txt"
+            The format in which the data needs to be saved. Can be "all", "csv", "txt" or "docx
         """
         df_swap_results = pd.DataFrame(columns=["dataset","p_homophone", "p_letter", "p_confusing_word", "homophones_injected",
                                         "letters_swapped", "confusing_words_injected", "words_modified", "sentences_changed"])
@@ -164,15 +164,18 @@ class DyslexiaInjector:
     def get_confusing_letters_dict(self):
         return self.confusing_letters_dict
     
-    def saver(self, temp_load: DataLoader, save_path, p_homophone, p_letter, p_confusing_word, format="both"):
+    def saver(self, temp_load: DataLoader, save_path, p_homophone, p_letter, p_confusing_word, format="all"):
         if format == "csv":
             temp_load.save_as_csv(save_path + f"{temp_load.get_name()}_p_homophone_{p_homophone}_p_letter_{p_letter}_p_confusing_word_{p_confusing_word}.csv")
         elif format == "txt":
             temp_load.save_as_txt(save_path + f"{temp_load.get_name()}_p_homophone_{p_homophone}_p_letter_{p_letter}_p_confusing_word_{p_confusing_word}.txt")
+        elif format == "docx":
+            temp_load.save_as_docx(save_path + f"{temp_load.get_name()}_p_homophone_{p_homophone}_p_letter_{p_letter}_p_confusing_word_{p_confusing_word}.docx")
         else:
-            #save as both
+            #save as all
             temp_load.save_as_csv(save_path + f"{temp_load.get_name()}_p_homophone_{p_homophone}_p_letter_{p_letter}_p_confusing_word_{p_confusing_word}.csv")
             temp_load.save_as_txt(save_path + f"{temp_load.get_name()}_p_homophone_{p_homophone}_p_letter_{p_letter}_p_confusing_word_{p_confusing_word}.txt")
+            temp_load.save_as_docx(save_path + f"{temp_load.get_name()}_p_homophone_{p_homophone}_p_letter_{p_letter}_p_confusing_word_{p_confusing_word}.docx")
 
     def get_punctuation(self, word):
         #gets punctuationand symbols from a word
