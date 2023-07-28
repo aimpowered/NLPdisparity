@@ -60,7 +60,8 @@ class DyslexiaInjector:
             f.close()
         return out   
 
-    def injection_swap(self, p_start=0, p_end=1, step_size=0.1, save_path="", save_format="all"):
+
+    def injection_swap(self, p_start=0, p_end=1, step_size=0.1, save_path="", save_format="all", individual=False):
         """
         Injects dyslexia into the dataset by swapping words and letters. It is to note, that probability p does not result in p% of the words being modified.
         For example, if p = 0.5, it does not mean that 50% of the words will be modified. It means that each word has a 50% chance of being modified. But, not all words
@@ -77,25 +78,48 @@ class DyslexiaInjector:
             The path where the data needs to be saved
         save_format : str
             The format in which the data needs to be saved. Can be "all", "csv", "txt" or "docx
+        individual: bool
+            If indivual is true, datasets are generated uniquely with p_homophone, p_letter or p_confusing_word
         """
-        df_swap_results = pd.DataFrame(columns=["dataset","p_homophone", "p_letter", "p_confusing_word", "homophones_injected",
-                                        "letters_swapped", "confusing_words_injected", "words_modified", "sentences_changed"])
-        #for loop that increases the p_homophone with step_size
-        for i in np.arange(p_start, p_end+step_size, step_size):
-            #round i to 3 decimals
-            i = round(i, 3)
-            for j in np.arange(p_start, p_end+step_size, step_size):
-                #round j to 3 decimals
-                j = round(j, 3)
-                for k in np.arange(p_start, p_end+step_size, step_size):
-                    k = round(k, 3)
-                    #create deep copy of the data
-                    temp_load, results = self.injection_runner(self.load.create_deepcopy(), i, j, k)
-                    df_swap_results.loc[len(df_swap_results)] = {"dataset":"wmt14_en", "p_homophone":i, "p_letter":j, "p_confusing_word":k,
+        def gather_save_results(self, df_swap_results, p_homophone, p_letter, p_confusing_word, save_path, save_format):
+            temp_load, results = self.injection_runner(self.load.create_deepcopy(), p_homophone, p_letter, p_confusing_word)
+            filename = self.saver(temp_load, save_path, p_homophone, p_letter, p_confusing_word, save_format)
+            df_swap_results.loc[len(df_swap_results)] = {"filename":filename,"dataset":"wmt14_en", "p_homophone":p_homophone, "p_letter":p_letter, "p_confusing_word":p_confusing_word,
                                                                 "homophones_injected":results[0],"letters_swapped":results[1], 
                                                                 "confusing_words_injected": results[2], "words_modified":results[3], 
                                                                 "sentences_changed":results[4]}
-                    self.saver(temp_load, save_path, i, j, k, save_format)
+            return df_swap_results
+
+        df_swap_results = pd.DataFrame(columns=["filename","dataset","p_homophone", "p_letter", "p_confusing_word", "homophones_injected",
+                                        "letters_swapped", "confusing_words_injected", "words_modified", "sentences_changed"])
+        if individual:
+            for i in range(3):
+                p_homophone = 0
+                p_letter = 0
+                p_confusing_word = 0
+                for k in np.arange(p_start+step_size, p_end+step_size, step_size):
+                    k = round(k, 3)
+                    if i == 0:
+                        p_homophone = k
+                    elif i == 1:
+                        p_letter = k
+                    elif i == 2:
+                        p_confusing_word = k
+                    df_swap_results = gather_save_results(self, results, p_homophone, p_letter, p_confusing_word, save_path, save_format)
+            df_swap_results = gather_save_results(self, df_swap_results, 0, 0, 0, save_path, save_format)
+            
+        else:
+            #for loop that increases the p_homophone with step_size
+            for i in np.arange(p_start, p_end+step_size, step_size):
+                #round i to 3 decimals
+                i = round(i, 3)
+                for j in np.arange(p_start, p_end+step_size, step_size):
+                    j = round(j, 3)
+                    for k in np.arange(p_start, p_end+step_size, step_size):
+                        k = round(k, 3)
+                        #create deep copy of the data
+                        df_swap_results = gather_save_results(self, df_swap_results, i, j, k, save_path, save_format)
+                        
         #add number of sentences to the dataframe
         df_swap_results["sentences"] = self.load.get_number_of_sentences()
         #add number of words to the dataframe
@@ -176,6 +200,7 @@ class DyslexiaInjector:
             temp_load.save_as_csv(save_path + f"{temp_load.get_name()}_p_homophone_{p_homophone}_p_letter_{p_letter}_p_confusing_word_{p_confusing_word}.csv")
             temp_load.save_as_txt(save_path + f"{temp_load.get_name()}_p_homophone_{p_homophone}_p_letter_{p_letter}_p_confusing_word_{p_confusing_word}.txt")
             temp_load.save_as_docx(save_path + f"{temp_load.get_name()}_p_homophone_{p_homophone}_p_letter_{p_letter}_p_confusing_word_{p_confusing_word}.docx")
+        return f"{temp_load.get_name()}_p_homophone_{p_homophone}_p_letter_{p_letter}_p_confusing_word_{p_confusing_word}"
 
     def get_punctuation(self, word):
         #gets punctuationand symbols from a word
