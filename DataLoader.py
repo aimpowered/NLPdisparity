@@ -2,6 +2,7 @@ import re
 import pandas as pd
 import copy
 import numpy as np
+import evaluate
 from docx import Document
 class DataLoader:
     """
@@ -137,3 +138,13 @@ class DataLoader:
     def get_number_of_letters(self):
         #need to ensure we only count letters and not punctuation
         return sum([len(re.sub(r'[^\w\s]','',sentence)) for sentence in self.data])
+    
+    def get_bleue_score(self, reference):
+        #returns bleu score of the data against a reference
+        bleu = evaluate.load("bleu")
+        if type(reference) == list:
+            return bleu.compute(predictions=self.data, references=reference)
+        elif type(reference) == DataLoader:
+            return bleu.compute(predictions=self.data, references=reference.get_data())
+        else:
+            raise Exception("Invalid reference type, please pass in a list or DataLoader instance")

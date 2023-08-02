@@ -89,7 +89,7 @@ class DyslexiaInjector:
                                                                 "confusing_words_injected": results[2], "words_modified":results[3], 
                                                                 "sentences_changed":results[4]}
             return df_swap_results
-
+        #efficiency wise this should be changed to lists and then combined at the end into a df
         df_swap_results = pd.DataFrame(columns=["filename","dataset","p_homophone", "p_letter", "p_confusing_word", "homophones_injected",
                                         "letters_swapped", "confusing_words_injected", "words_modified", "sentences_changed"])
         if individual:
