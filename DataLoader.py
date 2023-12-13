@@ -2,6 +2,8 @@ import re
 import pandas as pd
 import copy
 import numpy as np
+import evaluate
+from docx import Document
 class DataLoader:
     """
     Loader for benchmarking datasets to ensure universal formatting. To be used in conjunction with DyslexiaInjector.
@@ -9,7 +11,7 @@ class DataLoader:
     Attributes
     ----------
     path: str
-        Path to csv or txt file of the data. In the case of CSV there should only be 1 column
+        Path to csv, txt or docx file of the data. In the case of CSV there should only be 1 column
     data: list
         A list of striings
     dataset_name: str
@@ -49,10 +51,15 @@ class DataLoader:
             file_type = path.split(".")[-1]
             if file_type == "txt":
                 self.data = self.parse_txt(path)
+                self.data = [self.fix_format(sentence) for sentence in self.data]
             elif file_type == "csv":
                 self.data = pd.read_csv(path, header=None)
-                #convert to list  of strings
                 self.data = self.data[0].tolist()
+                #fix any formatting issues
+                self.data = [self.fix_format(sentence) for sentence in self.data]
+            elif file_type == "docx":
+                doc = Document(path)
+                self.data = [self.fix_format(paragraph.text) for paragraph in doc.paragraphs]
             else:
                 raise Exception("Invalid file type")
         elif data is not None:
@@ -105,6 +112,14 @@ class DataLoader:
         print(f"Saved {self.dataset_name} to {path}")
         return
     
+    def save_as_docx(self, path):
+        document = Document()
+        for sentence in self.data:
+            document.add_paragraph(sentence)
+        document.save(path)
+        print(f"Saved {self.dataset_name} to {path}")
+        return
+
     def get_data(self):
         return self.data
 
@@ -123,3 +138,44 @@ class DataLoader:
     def get_number_of_letters(self):
         #need to ensure we only count letters and not punctuation
         return sum([len(re.sub(r'[^\w\s]','',sentence)) for sentence in self.data])
+    
+    def get_bleue_score(self, reference):
+        #returns bleu score of the data against a reference
+        bleu = evaluate.load("bleu")
+        if type(reference) == list:
+            return bleu.compute(predictions=self.data, references=reference)
+        elif type(reference) == DataLoader:
+            return bleu.compute(predictions=self.data, references=reference.get_data())
+        else:
+            raise Exception("Invalid reference type, please pass in a list or DataLoader instance")
+
+    def get_wer(self, reference):
+        #returns wer score of the data against a reference
+        wer = evaluate.load("wer")
+        if type(reference) == list:
+            return wer.compute(predictions=self.data, references=reference)
+        elif type(reference) == DataLoader:
+            return wer.compute(predictions=self.data, references=reference.get_data())
+        else:
+            raise Exception("Invalid reference type, please pass in a list or DataLoader instance")
+
+    def get_bleurt_score(self, reference):
+        #returns bleurt score of the data against a reference
+        bleurt = evaluate.load("bleurt")
+        if type(reference) == list:
+            return bleurt.compute(predictions=self.data, references=reference)
+        elif type(reference) == DataLoader:
+            return bleurt.compute(predictions=self.data, references=reference.get_data())
+        else:
+            raise Exception("Invalid reference type, please pass in a list or DataLoader instance")
+    
+    def get_bert_score(self, reference):
+        #returns bert score of the data against a reference
+        bert = evaluate.load("bertscore")
+        if type(reference) == list:
+            return bert.compute(predictions=self.data, references=reference, lang="fr")
+        elif type(reference) == DataLoader:
+            return bert.compute(predictions=self.data, references=reference.get_data(),  lang="fr")
+        else:
+            raise Exception("Invalid reference type, please pass in a list or DataLoader instance")
+            

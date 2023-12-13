@@ -95,7 +95,38 @@ class DyslexiaInjector:
                                                                 "homophones_injected":results[0],"letters_swapped":results[1], 
                                                                 "confusing_words_injected": results[2], "words_modified":results[3], 
                                                                 "sentences_changed":results[4]}
-                    self.saver(temp_load, save_path, i, j, k, save_format)
+            return df_swap_results
+        #efficiency wise this should be changed to lists and then combined at the end into a df
+        df_swap_results = pd.DataFrame(columns=["filename","dataset","p_homophone", "p_letter", "p_confusing_word", "homophones_injected",
+                                        "letters_swapped", "confusing_words_injected", "words_modified", "sentences_changed"])
+        if individual:
+            for i in range(3):
+                p_homophone = 0
+                p_letter = 0
+                p_confusing_word = 0
+                for k in np.arange(p_start+step_size, p_end+step_size, step_size):
+                    k = round(k, 3)
+                    if i == 0:
+                        p_homophone = k
+                    elif i == 1:
+                        p_letter = k
+                    elif i == 2:
+                        p_confusing_word = k
+                    df_swap_results = gather_save_results(self, df_swap_results, p_homophone, p_letter, p_confusing_word, save_path, save_format)
+            df_swap_results = gather_save_results(self, df_swap_results, 0, 0, 0, save_path, save_format)
+            
+        else:
+            #for loop that increases the p_homophone with step_size
+            for i in np.arange(p_start, p_end+step_size, step_size):
+                #round i to 3 decimals
+                i = round(i, 3)
+                for j in np.arange(p_start, p_end+step_size, step_size):
+                    j = round(j, 3)
+                    for k in np.arange(p_start, p_end+step_size, step_size):
+                        k = round(k, 3)
+                        #create deep copy of the data
+                        df_swap_results = gather_save_results(self, df_swap_results, i, j, k, save_path, save_format)
+                        
         #add number of sentences to the dataframe
         df_swap_results["sentences"] = self.load.get_number_of_sentences()
         #add number of words to the dataframe
