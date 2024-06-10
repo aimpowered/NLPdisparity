@@ -1,360 +1,384 @@
-import random
-import pickle
+import re
+import pandas as pd
+import copy
 import numpy as np
-import DataLoader #Custom class
-class DyslexiaInjector:
+import evaluate
+from docx import Document
+import os
+class DataLoader:
     """
-    This class is used to inject dyslexia into a dataset. It can be used to inject homophones and confusing letters.
+    Loader for benchmarking datasets to ensure universal formatting. To be used in conjunction with DyslexiaInjector.
     ...
     Attributes
     ----------
-    load : DataLoader
-        The DataLoader object that contains the data that needs to be injected
-    homophones_dict : dict
-        A dictionary that contains the homophones
-    confusing_letters_dict : dict
-        A dictionary that contains the confusing letters
+    path: str
+        Path to csv, txt or docx file of the data. In the case of CSV there should only be 1 column
+    data: list
+        A list of striings
+    dataset_name: str
+        Name of the dataset that is used when saving the data
+    ...
     Methods
     -------
-    load_homophones(path)
-        Loads the homophones from a pickle file
-    load_confusing_letters(path)
-        Loads the confusing letters from a pickle file
-    injection_swap(p_start=0, p_end=1, step_size=0.1, save_path="", save_format="both")
-        Injects dyslexia into the dataset by swapping words and letters.
-    get_homophones(word)
-        Returns the homophones of a word
-    get_confusing_letters(letter)
-        Returns the confusing letters of a letter
-    injector(sentence, p_homophone, p_letter)
-        Injects dyslexia into a sentence with a given probability
+    parse_txt(path)
+        Parses a txt file and returns a list of strings
+    fix_format(sentence)
+        Fixes the formatting of a sentence
+    save_as_txt(path)
+        Saves the data as a txt file
+    save_as_csv(path)
+        Saves the data as a csv file
+    save_as_docx(path)
+        Saves the data as a docx file
+    get_data()
+        Returns the data
+    create_deepcopy()
+        Returns a deepcopy of the DataLoader instance
+    get_name()
+        Returns the dataset name
+    get_number_of_sentences()
+        Returns the number of sentences in the data
+    get_number_of_words()
+        Returns the number of words in the data
+    get_number_of_letters()
+        Returns the number of letters in the data
+    edit_distance(reference_sentence, sentence)
+        Returns the number of edits required to transform reference_sentence into sentence at word level
+        edits include insertions, deletions and substitutions
+        based on levenshtein distance
+        also returns a dictionary of substitutions, insertions and deletions
+    get_edit_distance(reference, manual_wer=False)
+        Returns the number of edits required to transform data into reference at word level, substitutions, insertions and deletions the associated dictionaries
+        and the WER (withouth alignment) if manual_wer is set to True
+    get_individual_edit_distance(reference)
+        Returns the number of edits required to transform data into reference at word level for each individual sentence
+    combine_nested_dict(dict1, dict2)
+        Combines two nested dictionaries
+    combine_dicts(dict1, dict2)
+        Combines two dictionaries
+    get_bleue_score(reference)
+        Returns bleu score of the data against a reference
+    get_wer(reference)
+        Returns the Word Error Rate (WER) of the data against a reference. With word alignment
+    get_bert_score(reference)
+        Returns the BERTScore similarity score of the data against a reference
+    get_LaBSE(reference, model=None, tokenizer=None)
+        Returns the LaBSE similarity score of the data against a reference which is a l2 norm between the reference and target sentences score.
+        Score of 1 means the sentences are identical, closer to 0 means they are less similar semantically.
+    ...
+
     Usage
     -------
     >>> from datasets import load_dataset
     >>> from DataLoader import DataLoader
-    >>> from DyslexiaInjector import DyslexiaInjector
     >>> dataset_wmt_enfr = load_dataset("wmt14",'fr-en', split='test')
     >>> to_translate = []
     >>> for i in range(len(dataset_wmt_enfr)):
     >>>     to_translate.append(dataset_wmt_enfr[i]['translation']['en'])
     >>> loader = DataLoader(data=to_translate, dataset_name="wmt14_enfr")
-    >>> dyslexia_injector = DyslexiaInjector(loader)
-    >>> dyslexia_injector.injection_swap(p_start=0.1, p_end=0.5, step_size=0.1, save_path="data/wmt14_enfr", save_format="both")
-    This creates multiple files with different levels of dyslexia injected into the dataset. The files are saved in the data folder.
+    >>> loader.save_as_txt("wmt14_enfr.txt")
+    We can also use the text file to create a new DataLoader instance
+    >>> loader2 = DataLoader(path="wmt14_enfr.txt", dataset_name="wmt14_enfr")
     """
-    def __init__(self, load: DataLoader, 
-                homophone_path = "data/homophones_dict.pickle",
-                confusing_letters_path = "data/confusing_letters_dict.pickle",
-                confusing_words_path="data/pedler_dict.pickle",
-                seed = 42):
-        self.load = load
-        self.homophones_dict = self.load_dict(homophone_path)
-        self.confusing_letters_dict = self.load_dict(confusing_letters_path)
-        self.confusing_words_dict = self.load_dict(confusing_words_path)
-        random.seed(seed)
-
-    def load_dict(self, path):
-        with open(path, "rb") as f:
-            out = pickle.load(f)
-            #close the file
-            f.close()
-        return out   
-
-    def injection_swap(self, p_start=0, p_end=1, step_size=0.1, save_path="", save_format="both"):
-        """
-        Injects dyslexia into the dataset by swapping words and letters. It is to note, that probability p does not result in p% of the words being modified.
-        For example, if p = 0.5, it does not mean that 50% of the words will be modified. It means that each word has a 50% chance of being modified. But, not all words
-        have homophones, confusing letters or consufing words. Therefore, the actual percentage of words that are modified is lower than p. The same applies to letters.
-        Parameters
-        ----------
-        p_start : float
-            The starting probability of swapping a word and letter
-        p_end : float
-            The ending probability of swapping a word and letter
-        step_size : float
-            The step size of the probability
-        save_path : str
-            The path where the data needs to be saved
-        save_format : str
-            The format in which the data needs to be saved. Can be "both", "csv" or "txt"
-        """
-        df_swap_results = pd.DataFrame(columns=["dataset","p_homophone", "p_letter", "p_confusing_word", "homophones_injected",
-                                        "letters_swapped", "confusing_words_injected", "words_modified", "sentences_changed"])
-        #for loop that increases the p_homophone with step_size
-        for i in np.arange(p_start, p_end+step_size, step_size):
-            #round i to 3 decimals
-            i = round(i, 3)
-            for j in np.arange(p_start, p_end+step_size, step_size):
-                #round j to 3 decimals
-                j = round(j, 3)
-                for k in np.arange(p_start, p_end+step_size, step_size):
-                    k = round(k, 3)
-                    #create deep copy of the data
-                    temp_load, results = self.injection_runner(self.load.create_deepcopy(), i, j, k)
-                    df_swap_results.loc[len(df_swap_results)] = {"dataset":"wmt14_en", "p_homophone":i, "p_letter":j, "p_confusing_word":k,
-                                                                "homophones_injected":results[0],"letters_swapped":results[1], 
-                                                                "confusing_words_injected": results[2], "words_modified":results[3], 
-                                                                "sentences_changed":results[4]}
-            return df_swap_results
-        #efficiency wise this should be changed to lists and then combined at the end into a df
-        df_swap_results = pd.DataFrame(columns=["filename","dataset","p_homophone", "p_letter", "p_confusing_word", "homophones_injected",
-                                        "letters_swapped", "confusing_words_injected", "words_modified", "sentences_changed"])
-        if individual:
-            for i in range(3):
-                p_homophone = 0
-                p_letter = 0
-                p_confusing_word = 0
-                for k in np.arange(p_start+step_size, p_end+step_size, step_size):
-                    k = round(k, 3)
-                    if i == 0:
-                        p_homophone = k
-                    elif i == 1:
-                        p_letter = k
-                    elif i == 2:
-                        p_confusing_word = k
-                    df_swap_results = gather_save_results(self, df_swap_results, p_homophone, p_letter, p_confusing_word, save_path, save_format)
-            df_swap_results = gather_save_results(self, df_swap_results, 0, 0, 0, save_path, save_format)
-            
+    # Constructor
+    def __init__(self, path=None, data=None, dataset_name=""):
+        self.dataset_name = dataset_name
+        if data is None and path is not None:
+            #check path to see if file is txt or csv
+            file_type = path.split(".")[-1]
+            if file_type == "txt":
+                self.data = self.parse_txt(path)
+                self.data = [self.fix_format(sentence) for sentence in self.data]
+            elif file_type == "csv":
+                self.data = pd.read_csv(path, header=None)
+                self.data = self.data[0].tolist()
+                #fix any formatting issues
+                self.data = [self.fix_format(sentence) for sentence in self.data]
+            elif file_type == "docx":
+                doc = Document(path)
+                self.data = [self.fix_format(paragraph.text) for paragraph in doc.paragraphs]
+            else:
+                raise Exception("Invalid file type")
+        elif data is not None:
+            #check if data is a list or a df
+            if isinstance(data, list):
+                #format each sentence in data
+                self.data = [self.fix_format(sentence) for sentence in data]
+            else:
+                raise Exception("Invalid data type, please pass in a list of sentences")
         else:
-            #for loop that increases the p_homophone with step_size
-            for i in np.arange(p_start, p_end+step_size, step_size):
-                #round i to 3 decimals
-                i = round(i, 3)
-                for j in np.arange(p_start, p_end+step_size, step_size):
-                    j = round(j, 3)
-                    for k in np.arange(p_start, p_end+step_size, step_size):
-                        k = round(k, 3)
-                        #create deep copy of the data
-                        df_swap_results = gather_save_results(self, df_swap_results, i, j, k, save_path, save_format)
-                        
-        #add number of sentences to the dataframe
-        df_swap_results["sentences"] = self.load.get_number_of_sentences()
-        #add number of words to the dataframe
-        df_swap_results["words"] = self.load.get_number_of_words()
-        #add number of characters to the dataframe
-        df_swap_results["letters"] = self.load.get_number_of_letters()
-        #percentage of sentences changed
-        df_swap_results["percentage_sentences_changed"] = df_swap_results["sentences_changed"] / df_swap_results["sentences"] * 100
-        #percentage of words modified
-        df_swap_results["percentage_words_modified"] = df_swap_results["words_modified"] / df_swap_results["words"] * 100
-        #percentaged of words swapped
-        df_swap_results["percentage_words_swapped_for_homophones"] = df_swap_results["homophones_injected"] / df_swap_results["words"] * 100
-        df_swap_results["percentage_words_swapped_for_confusing_words"] = df_swap_results["confusing_words_injected"] / df_swap_results["words"] * 100
-        #percentage of letters swapped
-        df_swap_results["percentage_letters_swapped"] = df_swap_results["letters_swapped"] / df_swap_results["letters"] * 100 
-        #save the results
-        df_swap_results.to_csv(f"{save_path}/swap_results.csv", index=False)
-        return df_swap_results
+            raise Exception("Please pass in a path or data")
 
-    def injection_runner(self, data_loader, p_homophone, p_letter, p_confusing_word):
-        #track of the amount of words that were swapped
-        homophones_injected = 0
-        #keep track of the amount of letters that were swapped
-        letters_swapped = 0
-        #keep track of the amount of confusing words that were injected
-        confusing_words_injected = 0
-        #track of the amount of words that were changed
-        words_modified = 0
-        #track of the amount of sentences that were changed
-        sentences_changed = 0
-        for i in range(len(data_loader.data)):
-            #get the sentence
-            sentence = data_loader.data[i]
-            #swap the sentence
-            sentence, results = self.injector(sentence, p_homophone, p_letter, p_confusing_word)
-            # update the amount of words that were swapped
-            homophones_injected += results[0]
-            #update the amount of letters that were swapped
-            letters_swapped += results[1]
-            #updated the amount of confusing words that were injected
-            confusing_words_injected += results[2]
-            #update the amount of words that were changed
-            words_modified += results[3]
-            #update the amount of sentences that were changed
-            if results[3] > 0:
-                sentences_changed += 1
-            #update the sentence in the dataframe
-            data_loader.data[i] = sentence
-        print(f"p_homophone = {p_homophone}, p_letter = {p_letter}, p_confusing_word = {p_confusing_word}")
-        print("Homophones Injected: " + str(homophones_injected))
-        print("Letters swapped: " + str(letters_swapped))
-        print("Confusing words injected: " + str(confusing_words_injected))
-        print("Words Modified: " + str(words_modified))
-        print("Sentences changed: " + str(sentences_changed))
-        return data_loader, (homophones_injected, letters_swapped, confusing_words_injected, words_modified, sentences_changed)
+    def parse_txt(self, path):
+        output = []
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                output.append(self.fix_format(line))
+        return output
+                
+    def fix_format(self, sentence):
+        #remove spacing before punctuation
+        sentence = re.sub(r'\s([?.!,"](?:\s|$))', r'\1', sentence)
+        #replace any double spaces with single space
+        sentence = re.sub(r'\s+', ' ', sentence)
+        #remove any leading or trailing spaces
+        sentence = sentence.strip()
+        #make all quotes (german and french) english double quotes
+        sentence = re.sub(r'«|»|„|“', '"', sentence)
+        #make all single quotes english single quotes
+        sentence = re.sub(r'‘|’', "'", sentence)
+        #make all french guillemets english double quotes
+        sentence = re.sub(r'‹|›', '"', sentence)
+        #if sentence begins and ends with quotes and there are only two, remove them
+        if sentence[0] == '"' and sentence[-1] == '"' and sentence.count('"') == 2:
+            sentence = sentence[1:-1]
+        elif sentence[0] == "'" and sentence[-1] == "'" and sentence.count("'") == 2:
+            sentence = sentence[1:-1]
+        return sentence
 
-    def get_homophones(self, word):
-        return self.homophones_dict[word]
+    def save_as_txt(self, path):
+        with open(path, "w", encoding="utf-8") as f:
+            for sentence in self.data:
+                f.write(f"{sentence}\n")
+        print(f"Saved {self.dataset_name} to {path}")
+        return
     
-    def get_homophone_dict(self):
-        return self.homophones_dict
+    def save_as_csv(self, path):
+        df = pd.DataFrame(self.data)
+        df.to_csv(path, index=False, header=False, encoding='utf-8')
+        print(f"Saved {self.dataset_name} to {path}")
+        return
     
-    def get_confusing_letters(self, word):
-        return self.confusing_letters_dict[word]
+    def save_as_docx(self, path):
+        document = Document()
+        for sentence in self.data:
+            document.add_paragraph(sentence)
+        document.save(path)
+        print(f"Saved {self.dataset_name} to {path}")
+        return
+
+    def get_data(self):
+        return self.data
+
+    def create_deepcopy(self):
+        return DataLoader(data=copy.deepcopy(self.data), dataset_name=self.dataset_name)
+        
+    def get_name(self):
+        return self.dataset_name
+
+    def get_number_of_sentences(self):
+        return len(self.data)
     
-    def get_confusing_letters_dict(self):
-        return self.confusing_letters_dict
+    def get_number_of_words(self):
+        return sum([len(sentence.split()) for sentence in self.data])
     
-    def saver(self, temp_load: DataLoader, save_path, p_homophone, p_letter, p_confusing_word, format="both"):
-        if format == "csv":
-            temp_load.save_as_csv(save_path + f"{temp_load.get_name()}_p_homophone_{p_homophone}_p_letter_{p_letter}_p_confusing_word_{p_confusing_word}.csv")
-        elif format == "txt":
-            temp_load.save_as_txt(save_path + f"{temp_load.get_name()}_p_homophone_{p_homophone}_p_letter_{p_letter}_p_confusing_word_{p_confusing_word}.txt")
-        else:
-            #save as both
-            temp_load.save_as_csv(save_path + f"{temp_load.get_name()}_p_homophone_{p_homophone}_p_letter_{p_letter}_p_confusing_word_{p_confusing_word}.csv")
-            temp_load.save_as_txt(save_path + f"{temp_load.get_name()}_p_homophone_{p_homophone}_p_letter_{p_letter}_p_confusing_word_{p_confusing_word}.txt")
+    def get_number_of_letters(self):
+        #need to ensure we only count letters and not punctuation
+        return sum([len(re.sub(r'[^\w\s]','',sentence)) for sentence in self.data])
 
-    def get_punctuation(self, word):
-        #gets punctuationand symbols from a word
-        punctuation = []
-        for i in range(len(word)):
-            if word[i] in '".,?!:;()' or word[i] == "'":
-                punctuation.append((i,word[i]))
-        return punctuation
-
-    def homophone_swapper(self, in_word, out_word, apostrophe=False):
-        #pick a random homophone from the list of homophones
-        homophone = random.choice(self.homophones_dict[out_word])
-        #check if difference is apostrophe
-        if homophone.replace("'", "") == out_word:
-            apostrophe = True
-        #check if the first letter is capitalized
-        if in_word.strip('".,?!:;()').strip("'")[0].isupper():
-            #Capitalize the first letter of the homophone
-            homophone = homophone[0].upper() + homophone[1:]
-        #check if all the letters in the word are capitalized
-        if in_word.isupper() and len(in_word) > 1:
-            #capitalize the homophone
-            homophone = homophone.upper()
-        return homophone, apostrophe
-
-    def confusing_word_injector(self, in_word, out_word):
-        confusing_word = random.choice(self.confusing_words_dict[out_word])
-        #check if the first letter is capitalized
-        if in_word.strip('".,?!:;()').strip("'")[0].isupper():
-            #Capitalize the first letter of the confusing word
-            confusing_word = confusing_word[0].upper() + confusing_word[1:]
-        #check if all the letters in the word are capitalized
-        if in_word.isupper() and len(in_word) > 1:
-            #capitalize the confusing word
-            confusing_word = confusing_word.upper()
-        return confusing_word
-
-    def confusing_letter_swapper(self, in_word, out_word, p_letter, letters_swapped, homophone_swapped, confusing_word_swapped, confusing_letter_swapped):
-        for i in range(len(out_word)):
-                #check if swap a letter with a confusing letter with probability p_letter
-                if  random.random() <= p_letter:
-                    chance = random.random()
-                    #need to skip first letter with 95% probability, based on Peddler findings
-                    if i == 0 and chance >= 0.95:
-                        continue
-                    #check if the word is in the confusing letters dict
-                    if out_word[i].lower() in self.confusing_letters_dict.keys():
-                        #pick a random letter from the list of confusing letters
-                        confusing_letter = random.choice(self.confusing_letters_dict[out_word[i].lower()])
-                        #check if swapping a letter in a homophone
-                        if not homophone_swapped and not confusing_word_swapped:
-                            if in_word.strip('".,?!:;()').strip("'")[i].isupper():
-                                confusing_letter = confusing_letter.upper()
+    def edit_distance(reference_sentence, sentence):
+        """
+        Returns the number of edits required to transform reference_sentence into sentence at word level
+        edits include insertions, deletions and substitutions
+        based on levenshtein distance
+        also returns a dictionary of substitutions, insertions and deletions
+        """
+        substitutions = 0
+        insertions = 0
+        deletions = 0
+        substitution_dict = {}
+        insertion_dict = {}
+        deletion_dict = {}
+        #remove punctuation and split into words
+        sentence = re.sub(r'[^\w\s]','',sentence).lower().split()
+        reference_sentence = re.sub(r'[^\w\s]','',reference_sentence).lower().split()
+        #create matrix
+        matrix = np.zeros((len(reference_sentence)+1,len(sentence)+1))
+        #fill in first row and column
+        for i in range(len(reference_sentence)+1):
+            matrix[i][0] = i
+        for j in range(len(sentence)+1):
+            matrix[0][j] = j
+        #fill in rest of matrix
+        for i in range(1,len(reference_sentence)+1):
+            for j in range(1,len(sentence)+1):
+                if sentence[j-1] == reference_sentence[i-1]:
+                    matrix[i][j] = matrix[i-1][j-1]
+                else:
+                    matrix[i][j] = min(matrix[i-1][j-1], matrix[i-1][j], matrix[i][j-1])+1
+        #backtrack to find edits
+        i = len(reference_sentence)
+        j = len(sentence)
+        while i > 0 and j > 0:
+            if sentence[j-1] == reference_sentence[i-1]:
+                i -= 1
+                j -= 1
+            else:
+                if matrix[i][j] == matrix[i-1][j-1]+1:
+                    substitutions += 1
+                    if reference_sentence[i-1] not in substitution_dict:
+                        substitution_dict[reference_sentence[i-1]] = {sentence[j-1]:1}
+                    else:
+                        if sentence[j-1] not in substitution_dict[reference_sentence[i-1]]:
+                            substitution_dict[reference_sentence[i-1]][sentence[j-1]] = 1
                         else:
-                            if out_word[i].isupper():
-                                confusing_letter = confusing_letter.upper()
-                        #replace the letter with the confusing letter at index j
-                        out_word = out_word[:i] + confusing_letter + out_word[i+1:]
-                        #update flag
-                        confusing_letter_swapped = True
-                        #update the amount of letters that were swapped
-                        letters_swapped += 1
-                        #lower the probability of swapping a letter with a confusing letter each time a letter is swapped
-                        p_letter = 0.1*p_letter
-                if not homophone_swapped and not confusing_word_swapped:
-                    #ensure's proper capitalization of the word
-                    if in_word.strip('".,?!:;()').strip("'")[i].isupper():
-                        out_word = out_word[:i] + out_word[i].upper() + out_word[i+1:]
-        return out_word, letters_swapped, confusing_letter_swapped
+                            substitution_dict[reference_sentence[i-1]][sentence[j-1]] += 1
+                    i -= 1
+                    j -= 1
+                elif matrix[i][j] == matrix[i-1][j]+1:
+                    deletions += 1
+                    if reference_sentence[i-1] not in deletion_dict:
+                        deletion_dict[reference_sentence[i-1]] = 1
+                    else:
+                        deletion_dict[reference_sentence[i-1]] += 1
+                    i -= 1
+                elif matrix[i][j] == matrix[i][j-1]+1:
+                    insertions += 1
+                    if sentence[j-1] not in insertion_dict:
+                        insertion_dict[sentence[j-1]] = 1
+                    else:
+                        insertion_dict[sentence[j-1]] += 1
+                    j -= 1
+        while i > 0:
+            deletions += 1
+            if reference_sentence[i-1] not in deletion_dict:
+                deletion_dict[reference_sentence[i-1]] = 1
+            else:
+                deletion_dict[reference_sentence[i-1]] += 1
+            i -= 1
+        while j > 0:
+            insertions += 1
+            if sentence[j-1] not in insertion_dict:
+                insertion_dict[sentence[j-1]] = 1
+            else:
+                insertion_dict[sentence[j-1]] += 1
+            j -= 1
+        distance = substitutions+insertions+deletions
+        return substitutions, insertions, deletions, substitution_dict, insertion_dict, deletion_dict, distance
+        
+    def get_edit_distance(self, reference, manual_wer=False):
+        """
+        Returns the number of edits required to transform data into reference at word level, substitutions, insertions and deletions the associated dictionaries
+        and the WER (withouth alignment) if manual_wer is set to True
+        """
+        if type(reference) == list:
+            substitutions = 0
+            insertions = 0
+            deletions = 0
+            all_sub = {}
+            all_ins = {}
+            all_del = {}
+            distance = 0
+            for i in range(len(self.data)):
+                sub, ins, dele, substitution_dict, insertion_dict, deletion_dict, dist = DataLoader.edit_distance(reference[i], self.data[i], )
+                all_sub = self.combine_nested_dict(all_sub, substitution_dict)
+                all_ins = self.combine_dicts(all_ins, insertion_dict)
+                all_del = self.combine_dicts(all_del, deletion_dict)
+                substitutions += sub
+                insertions += ins
+                deletions += dele
+                distance += dist
+            if manual_wer:
+                return substitutions, insertions, deletions, all_sub, all_ins, all_del, distance, distance/(sum([len(sentence.split()) for sentence in reference]))
+            return substitutions, insertions, deletions, all_sub, all_ins, all_del, distance
+        elif type(reference) == DataLoader:
+            return self.get_edit_distance(reference.get_data(), manual_wer=manual_wer)
+        else:
+            raise Exception("Invalid reference type, please pass in a list or DataLoader instance")
 
+    def get_individual_edit_distance(self, reference):
+        """
+        Returns the number of edits required to transform data into reference at word level for each individual sentence
+        """
+        if type(reference) == list:
+            output = []
+            for i in range(len(self.data)):
+                sub, ins, dele, substitution_dict, insertion_dict, deletion_dict, distance = DataLoader.edit_distance(reference[i], self.data[i], )
+                output.append((sub, ins, dele, substitution_dict, insertion_dict, deletion_dict, distance))
+            return output
+        elif type(reference) == DataLoader:
+            return self.get_individual_edit_distance(reference.get_data())
+        else:
+            raise Exception("Invalid reference type, please pass in a list or DataLoader instance")       
 
-    def insert_punctuation(self, in_word, out_word, punctuation, apostrophe, homophone_swapped, confusing_word_swapped): #inwor car? outwor care
-        if len(punctuation) == 0:
-            return out_word
-        for index, punc in punctuation:
-                    if apostrophe and punc == "'" and index != 0 and index != len(in_word)-1:
-                        continue
-                    #if word already has that type of punctuation then skip it if its not at the first or last index
-                    #also need to make sure its not punction that can be consecutive like "..." 
-                    if index != 0 and index != len(in_word)-1 and punc in out_word:
-                        if in_word[index-1] == punc and in_word[index+1] == punc:
-                            out_word = out_word[:index] + punc + out_word[index:]
-                        continue
-                    if homophone_swapped or confusing_word_swapped:
-                        if index == len(in_word)-1:
-                            out_word = out_word + punc
-                        continue
-                    out_word = out_word[:index] + punc + out_word[index:]
-        return out_word
+    def combine_nested_dict(self, dict1, dict2):
+        for key in dict2:
+            if key not in dict1:
+                dict1[key] = dict2[key]
+            else:
+                for key2 in dict2[key]:
+                    if key2 not in dict1[key]:
+                        dict1[key][key2] = dict2[key][key2]
+                    else:
+                        dict1[key][key2] += dict2[key][key2]
+        return dict1
     
-    def injector(self, sentence, p_homophone, p_letter, p_confusing_word):
-        #split the sentence into a list of words
-        words = sentence.split()
-        #keep track of the amount of homophones injected 
-        homonphones_injected = 0
-        #keep track of the amount of letters that were swapped
-        letters_swapped = 0
-        #keep track of the amount of confusing words injected
-        confusing_words_injected = 0
-        #keep track of the amount of words that were changed
-        words_modified = 0
-        for i in range(len(words)):
-            #check for punctuation at all indexes of the word and save it
-            punctuation = self.get_punctuation(words[i])         
-            #get the word and remove any punctuation
-            word = words[i].lower().strip('".,?!:;()')
-            word = word.strip("'")
-            #create a copy of the word to check if it was changed
-            word_copy = words[i]
-            #flag for homophone swapped and confusing letter swapped
-            homophone_swapped = False
-            confusing_letter_swapped = False
-            confusing_word_swapped = False
-            #flag for apostrophe
-            apostrophe = False
-            #check if the word is in the homophones dict
-            if word in self.homophones_dict.keys():
-                #check if the word has any homophones
-                if len(self.homophones_dict[word]) > 0:
-                    #swap the word with a homophone with probability p_homophone
-                    if random.random() <= p_homophone:
-                        #replace the word with the homophone, flag to see if apostrophe is the difference in homophone
-                        word, apostrophe = self.homophone_swapper(words[i], word)
-                        #update the amount of words that were swapped for homophone
-                        homonphones_injected += 1
-                        #update the flag
-                        homophone_swapped = True
-            #check if the word is in the pedler dict
-            if word in self.confusing_words_dict.keys():
-                #check if the word has any confusing words
-                if len(self.confusing_words_dict[word]) > 0:
-                    #swap the word with a homophone with probability p_homophone
-                    if random.random() <= p_confusing_word:
-                        word = self.confusing_word_injector(words[i], word)
-                        #update the amount of words that were swapped for homophone
-                        confusing_words_injected += 1
-                        #update the flag
-                        confusing_word_swapped = True
-            #use confusing letter swapper to swap letters with probability p_letter
-            word, letters_swapped, confusing_letter_swapped = self.confusing_letter_swapper(
-                words[i], word, p_letter,
-                letters_swapped, homophone_swapped,
-                confusing_word_swapped, confusing_letter_swapped)
-            #If whole word is upper case and its more than 1 letter then capitalize the whole word
-            if words[i].isupper() and len(words[i]) > 1:
-                word = word.upper()
-            #replace the orignal word with new word and proper punctuation if any
-            word = self.insert_punctuation(words[i], word, punctuation, apostrophe, homophone_swapped, confusing_word_swapped)
-            if confusing_letter_swapped or homophone_swapped or confusing_word_swapped:
-                words[i] = word
-                words_modified += 1
-        #join the list of words back into a sentence
-        sentence = " ".join(words)
-        return sentence, (homonphones_injected, letters_swapped, confusing_words_injected, words_modified)
+    def combine_dicts(self, dict1, dict2):
+        for key in dict2:
+            if key not in dict1:
+                dict1[key] = dict2[key]
+            else:
+                dict1[key] += dict2[key]
+        return dict1
+
+    def get_bleue_score(self, reference):
+        #returns bleu score of the data against a reference
+        bleu = evaluate.load("bleu")
+        if type(reference) == list:
+            return bleu.compute(predictions=self.data, references=reference)
+        elif type(reference) == DataLoader:
+            return bleu.compute(predictions=self.data, references=reference.get_data())
+        else:
+            raise Exception("Invalid reference type, please pass in a list or DataLoader instance")
+
+    def get_wer(self, reference):
+        """
+        Returns the Word Error Rate (WER) of the data against a reference. With word alignment
+        """
+        wer = evaluate.load("wer")
+        if type(reference) == list:
+            return wer.compute(predictions=self.data, references=reference)
+        elif type(reference) == DataLoader:
+            return wer.compute(predictions=self.data, references=reference.get_data())
+        else:
+            raise Exception("Invalid reference type, please pass in a list or DataLoader instance")
+
+
+    def get_bert_score(self, reference):
+        """
+        Returns the BERTScore similarity score of the data against a reference.
+        """
+        bert = evaluate.load("bertscore")
+        if type(reference) == list:
+            return bert.compute(predictions=self.data, references=reference, lang="fr")
+        elif type(reference) == DataLoader:
+            return bert.compute(predictions=self.data, references=reference.get_data(), lang="fr")
+        else:
+            raise Exception("Invalid reference type, please pass in a list or DataLoader instance")
+
+    def get_LaBSE(self, reference, model=None, tokenizer=None):
+        """
+        Returns the LaBSE similarity score of the data against a reference which is a l2 norm between the reference and target sentences score.
+        Score of 1 means the sentences are identical, closer to 0 means they are less similar semantically.
+        """
+        if model is None:
+            model = BertModel.from_pretrained("setu4993/LaBSE")
+        if tokenizer is None:
+            tokenizer = BertTokenizerFast.from_pretrained("setu4993/LaBSE")
+        if type(reference) == list:
+            pass
+        elif type(reference) == DataLoader:
+            reference = reference.get_data()
+        else:
+            raise Exception("Invalid reference type, please pass in a list or DataLoader instance")
+        target = self.data
+        reference_inputs = tokenizer(reference, return_tensors="pt", padding=True).to("cuda")
+        target_inputs = tokenizer(target, return_tensors="pt", padding=True).to("cuda")
+        with torch.no_grad():
+            reference_outputs = model(**reference_inputs)
+            target_outputs = model(**target_inputs)
+        reference_embeddings = reference_outputs.pooler_output
+        target_embeddings = target_outputs.pooler_output
+        return self.similarity(reference_embeddings, target_embeddings)
+
+            
