@@ -16,9 +16,9 @@ class TestInjector(unittest.TestCase):
             to_translate_wmt14_en.append(dataset_wmt_enfr[i]['translation']['en'])
         wmt14_en = DataLoader(data=to_translate_wmt14_en, dataset_name="wmt14_en")
         #The files paths for homophones and confusing letters will probably have to change
-        self.injector =  DyslexiaInjector(load=wmt14_en, homophone_path="data/homophones_dict.pickle",
-                                        confusing_letters_path="data/confusing_letters_dict.pickle", 
-                                        confusing_words_path="data/pedler_dict.pickle", seed=3)
+        self.injector =  DyslexiaInjector(load=wmt14_en, homophone_path="dict/homophones_dict.pickle",
+                                        confusing_letters_path="dict/confusing_letters_dict.pickle", 
+                                        confusing_words_path="dict/pedler_dict.pickle", seed=3)
     
     def test_get_punctuation(self):
         test_string = "Hello-W.o.rld's?"

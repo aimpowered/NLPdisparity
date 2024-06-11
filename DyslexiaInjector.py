@@ -48,9 +48,9 @@ class DyslexiaInjector:
     This creates multiple files with different levels of dyslexia injected into the dataset. The files are saved in the data folder.
     """
     def __init__(self, load: DataLoader, 
-                homophone_path = "data/homophones_dict.pickle",
-                confusing_letters_path = "data/confusing_letters_dict.pickle",
-                confusing_words_path="data/pedler_dict.pickle",
+                homophone_path = "dict/homophones_dict.pickle",
+                confusing_letters_path = "dict/confusing_letters_dict.pickle",
+                confusing_words_path="dict/pedler_dict.pickle",
                 seed = 42):
         self.load = load
         self.homophones_dict = self.load_dict(homophone_path)
