@@ -1,6 +1,12 @@
+import re
+import pandas as pd
+import copy
+import numpy as np
+import evaluate
+from docx import Document
+import os
 import unittest
 from datasets import load_dataset
-import DyslexiaInjector
 class TestInjector(unittest.TestCase):
     
     def setUp(self):
