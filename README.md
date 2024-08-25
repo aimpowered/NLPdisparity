@@ -11,6 +11,8 @@ Each file within the dataset consists of a “.txt” or “.docx” file contai
 * *baseline_results.ipynb* is the notebook that looks over preliminary results (BLEU and WER)
 * *edit_distance.ipynb* is the notebook where edit distance was calculated and includes some analysis
 * *bert_score.ipynb* was used to calculate BERT score (bert_scores folder contains the saved scores for quicker access) and has some analysis
+* *BLEURT.ipynb* was used to calculate BLEURT score (BLEURT_scores folder contains the saved scores for quicker access) and has some analysis
+* *COMET.ipynb* was used to calculate COMET score (COMET_scores folder contains the saved scores for quicker access) and has some analysis
 * *LaBSE_data.ipynb* was used to calculate LaBSE embeddings and has some analysis (LaBSE folder contains the saved results for quicker access)
 * *pos_tags_analysis.ipynb* is an analysis of the POS tags of the translated text
 * *diff_lib_analysis.ipynb* is the notebook that uses DiffLib to analyze the outputs from the translation services
